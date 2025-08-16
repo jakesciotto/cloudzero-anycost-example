@@ -143,6 +143,11 @@ After processing the data, the script will prompt you to upload the CBF data to 
 1. Enter `y` if you want to upload the data.
 2. Provide your AnyCost Stream Connection ID.
 3. Enter your CloudZero API key when prompted.
+4. Specify the billing month in YYYY-MM format (e.g., "2024-08").
+5. Choose an operation type:
+   - **replace_drop** (default): Replace all existing data for the month
+   - **replace_hourly**: Replace data with overlapping hours  
+   - **sum**: Append data to existing records
 
 ### Viewing Results
 
@@ -151,6 +156,39 @@ Once uploaded, you can view the processed data within the CloudZero platform. Na
 ## Usage Examples
 
 To use the `anycost_example.py` script to transform the cost data to CBF, run the command as described in the [Running the Script](#running-the-script) section.
+
+## Testing
+
+This repository includes a comprehensive test suite to ensure code quality and reliability.
+
+### Running Tests
+
+1. Create and activate a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+2. Install test dependencies:
+   ```bash
+   pip install -r tests/requirements-dev.txt
+   ```
+
+3. Run the test suite:
+   ```bash
+   python -m pytest tests/ -v
+   ```
+
+### Test Coverage
+
+The test suite includes 11 test cases covering:
+- CSV reading and processing functions
+- Data transformation for usage, commitments, and discounts
+- CBF output generation
+- AnyCost Stream API upload functionality with mocked requests
+- All operation types (replace_drop, replace_hourly, sum)
+
+All tests use proper mocking to isolate functionality and avoid external dependencies.
 
 ## Contributing
 

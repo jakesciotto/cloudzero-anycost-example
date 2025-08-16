@@ -6,6 +6,13 @@
 #   1. Query data from a given cloud provider for a billing month
 #   2. Transform that cloud provider data into Common Billing Format (CBF)
 #   3. Send that CBF data into the CloudZero platform through an AnyCost Stream connection
+#
+# When uploading to AnyCost Stream:
+# - A billing month must be specified in ISO 8601 format (e.g., "2024-08")
+# - An operation type can be specified to control how data is handled:
+#   - replace_drop: Replace all existing data for the month (default)
+#   - replace_hourly: Replace data with overlapping hours
+#   - sum: Append data to existing records
 
 import csv
 import decimal
@@ -94,14 +101,47 @@ def write_cbf_rows_to_csv(cbf_rows: list[dict[str, str]], output_file_path: str)
 
 
 def upload_to_anycost(cbf_rows: list[dict[str, str]]):
-    """Upload CBF rows to an AnyCost Stream connection."""
+    """Upload CBF rows to an AnyCost Stream connection.
+    
+    Required parameters:
+    - month: The billing month in ISO 8601 format (e.g., "2024-08")
+    - data: List of CBF rows to upload
+    
+    Optional parameters:
+    - operation: How to handle existing data for the month
+      - "replace_drop" (default): Replace all existing data for the month
+      - "replace_hourly": Replace data with overlapping hours
+      - "sum": Append data to existing records
+    """
     anycost_stream_connection_id = input("Enter your AnyCost Stream Connection ID: ")
     cloudzero_api_key = getpass.getpass("Enter your CloudZero API Key: ")
+    
+    # Get the billing month from user
+    month = input("Enter the billing month (YYYY-MM format, e.g., 2024-08): ")
+    
+    # Get the operation type from user
+    print("\nOperation types:")
+    print("1. replace_drop (default) - Replace all existing data for the month")
+    print("2. replace_hourly - Replace data with overlapping hours")
+    print("3. sum - Append data to existing records")
+    operation_choice = input("Enter operation type (1-3, default: 1): ").strip()
+    
+    operation_map = {
+        "1": "replace_drop",
+        "2": "replace_hourly", 
+        "3": "sum",
+        "": "replace_drop"  # default
+    }
+    operation = operation_map.get(operation_choice, "replace_drop")
 
     response = requests.post(
         f"https://api.cloudzero.com/v2/connections/billing/anycost/{anycost_stream_connection_id}/billing_drops",
         headers={"Authorization": cloudzero_api_key},
-        json={"data": cbf_rows},
+        json={
+            "month": month,
+            "operation": operation,
+            "data": cbf_rows
+        },
     )
 
     print(json.dumps(response.json(), indent=2))
