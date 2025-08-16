@@ -19,6 +19,7 @@ from anycost_example import (
     process_discounts,
     write_cbf_rows_to_csv,
     upload_to_anycost,
+    parse_month_range,
 )
 
 
@@ -180,6 +181,7 @@ class TestUploadToAnycost:
         # Setup mocks
         mock_input.side_effect = [
             "connection-123",  # AnyCost Stream Connection ID
+            "1",               # single month mode
             "2024-08",         # month
             "1"                # operation choice (replace_drop)
         ]
@@ -205,11 +207,11 @@ class TestUploadToAnycost:
             }
         )
         
-        # Verify response was printed (including operation type prints)
-        assert mock_print.call_count == 5
-        # Check that the final call was the JSON response
-        final_call = mock_print.call_args_list[-1]
-        assert '"status": "success"' in str(final_call)
+        # Verify response was printed (includes processing mode, operation type, and upload status prints)
+        assert mock_print.call_count >= 5
+        # Check that one of the calls contains the JSON response
+        print_calls_str = str(mock_print.call_args_list)
+        assert '"status": "success"' in print_calls_str
 
     @patch('anycost_example.input')
     @patch('anycost_example.getpass.getpass')
@@ -218,6 +220,7 @@ class TestUploadToAnycost:
     def test_upload_to_anycost_replace_hourly(self, mock_print, mock_post, mock_getpass, mock_input):
         mock_input.side_effect = [
             "connection-789",
+            "1",        # single month mode
             "2024-09", 
             "2"  # replace_hourly
         ]
@@ -240,6 +243,7 @@ class TestUploadToAnycost:
     def test_upload_to_anycost_sum_operation(self, mock_print, mock_post, mock_getpass, mock_input):
         mock_input.side_effect = [
             "connection-999",
+            "1",        # single month mode
             "2024-10",
             "3"  # sum
         ]
@@ -262,6 +266,7 @@ class TestUploadToAnycost:
     def test_upload_to_anycost_default_operation(self, mock_print, mock_post, mock_getpass, mock_input):
         mock_input.side_effect = [
             "connection-default",
+            "1",        # single month mode
             "2024-11",
             ""  # empty string should default to replace_drop
         ]
@@ -276,3 +281,122 @@ class TestUploadToAnycost:
         
         args, kwargs = mock_post.call_args
         assert kwargs["json"]["operation"] == "replace_drop"
+
+
+class TestParseMonthRange:
+    def test_parse_single_month(self):
+        result = parse_month_range("2024-08")
+        assert result == ["2024-08"]
+
+    def test_parse_month_range(self):
+        result = parse_month_range("2024-08:2024-10")
+        assert result == ["2024-08", "2024-09", "2024-10"]
+
+    def test_parse_month_range_across_year(self):
+        result = parse_month_range("2024-11:2025-02")
+        assert result == ["2024-11", "2024-12", "2025-01", "2025-02"]
+
+    def test_parse_comma_separated_months(self):
+        result = parse_month_range("2024-08,2024-09,2024-11")
+        assert result == ["2024-08", "2024-09", "2024-11"]
+
+    def test_parse_comma_separated_with_spaces(self):
+        result = parse_month_range("2024-08, 2024-09 , 2024-11")
+        assert result == ["2024-08", "2024-09", "2024-11"]
+
+    def test_parse_single_month_range(self):
+        result = parse_month_range("2024-08:2024-08")
+        assert result == ["2024-08"]
+
+
+class TestUploadToAnycostBatch:
+    @patch('anycost_example.input')
+    @patch('anycost_example.getpass.getpass')
+    @patch('anycost_example.requests.post')
+    @patch('builtins.print')
+    def test_batch_upload_success(self, mock_print, mock_post, mock_getpass, mock_input):
+        # Setup mocks for batch mode
+        mock_input.side_effect = [
+            "connection-123",  # AnyCost Stream Connection ID
+            "2",               # batch processing mode
+            "2024-08,2024-09", # months
+            "1"                # operation choice (replace_drop)
+        ]
+        mock_getpass.return_value = "api-key-456"
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"status": "success"}
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+        
+        cbf_rows = [{"lineitem/type": "Usage", "cost/cost": "10.00"}]
+        
+        # Call function
+        upload_to_anycost(cbf_rows)
+        
+        # Verify two API calls were made
+        assert mock_post.call_count == 2
+        
+        # Check first call
+        first_call = mock_post.call_args_list[0]
+        assert first_call[1]["json"]["month"] == "2024-08"
+        assert first_call[1]["json"]["operation"] == "replace_drop"
+        assert first_call[1]["json"]["data"] == cbf_rows
+        
+        # Check second call
+        second_call = mock_post.call_args_list[1]
+        assert second_call[1]["json"]["month"] == "2024-09"
+        assert second_call[1]["json"]["operation"] == "replace_drop"
+        assert second_call[1]["json"]["data"] == cbf_rows
+
+    @patch('anycost_example.input')
+    @patch('anycost_example.getpass.getpass')
+    @patch('anycost_example.requests.post')
+    @patch('builtins.print')
+    def test_batch_upload_range(self, mock_print, mock_post, mock_getpass, mock_input):
+        mock_input.side_effect = [
+            "connection-456",
+            "2",               # batch mode
+            "2024-08:2024-10", # month range
+            "1"                # replace_drop
+        ]
+        mock_getpass.return_value = "api-key-789"
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"status": "success"}
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+        
+        cbf_rows = []
+        upload_to_anycost(cbf_rows)
+        
+        # Should make 3 calls for Aug, Sep, Oct
+        assert mock_post.call_count == 3
+        
+        months = [call[1]["json"]["month"] for call in mock_post.call_args_list]
+        assert months == ["2024-08", "2024-09", "2024-10"]
+
+    @patch('anycost_example.input')
+    @patch('anycost_example.getpass.getpass')
+    @patch('anycost_example.requests.post')
+    @patch('builtins.print')
+    def test_single_mode_still_works(self, mock_print, mock_post, mock_getpass, mock_input):
+        mock_input.side_effect = [
+            "connection-789",
+            "1",               # single mode
+            "2024-08",         # single month
+            "1"                # replace_drop
+        ]
+        mock_getpass.return_value = "api-key-123"
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"status": "success"}
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+        
+        cbf_rows = []
+        upload_to_anycost(cbf_rows)
+        
+        # Should make only 1 call
+        assert mock_post.call_count == 1
+        assert mock_post.call_args[1]["json"]["month"] == "2024-08"
