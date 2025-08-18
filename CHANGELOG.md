@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Critical Test Coverage**: Restored `tests/__init__.py` which was accidentally deleted, breaking test discovery and removing all test coverage
+- **Input Validation**: Added comprehensive validation for month format inputs in `parse_month_range()` function
+  - Validates YYYY-MM format with regex pattern matching
+  - Provides clear error messages for invalid formats
+  - Handles empty/null inputs gracefully
+  - Validates month ranges (start cannot be after end)
+- **Network Error Handling**: Enhanced network operation error handling in `upload_to_anycost()` function
+  - Added 30-second timeout for API requests
+  - Specific handling for timeout, connection, and HTTP errors
+  - Detailed error messages with request context
+  - JSON error response parsing for API errors
+  - Graceful handling of unexpected errors
+
 ### Added
 - **AnyCost Stream API Compliance**: Updated `upload_to_anycost()` function to include required `month` parameter in ISO 8601 format (e.g., "2024-08")
 - **Batch Processing**: Added support for uploading data to multiple months in a single session

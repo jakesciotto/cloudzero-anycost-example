@@ -204,7 +204,8 @@ class TestUploadToAnycost:
                 "month": "2024-08",
                 "operation": "replace_drop", 
                 "data": cbf_rows
-            }
+            },
+            timeout=30
         )
         
         # Verify response was printed (includes processing mode, operation type, and upload status prints)
